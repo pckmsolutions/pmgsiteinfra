@@ -8,17 +8,6 @@ from functools import wraps
 
 logger = getLogger(__name__)
 
-def _create_session(access_token, id_token, user_info):
-    logger.debug(f'Creating session for {user_info}')
-    session['auth_access_token'] = access_token
-    session['auth_id_token'] = id_token
-    session['auth_user_info'] = user_info
-
-def _destroy_session():
-    for k in ['auth_access_token', 'auth_id_token', 'auth_user_info']:
-        if k in session:
-            del session[k]
-
 def access_token(key=None):
     return _session_dict('auth_access_token', key)
 
@@ -42,8 +31,6 @@ class AuthServerCallError(Exception):
             return resp.json()
         raise AuthServerCallError()
 
-    
-
 class AuthApp(OAuth):
     def __init__(self, app, logon_endpoint):
         super(AuthApp, self).__init__(app) #TODO, cache=self.cache)
@@ -52,12 +39,16 @@ class AuthApp(OAuth):
         app.after_request(self._after_request)
         self.id_token_certs = None
         self.logon_endpoint = logon_endpoint
+        self.logon_hooks = []
 
     def _before_request(self):
         pass
 
     def _after_request(self, response):
         return response
+
+    def register_logon_hook(self, call):
+        self.logon_hooks.append(call)
 
     def logon_page(self, redirect_endpoint):
         
@@ -82,7 +73,7 @@ class AuthApp(OAuth):
         id_token.validate()
 
         user_info = AuthServerCallError.wrap_call(self.govsieauth.get, self.govsieauth.server_metadata['userinfo_endpoint'])
-        _create_session(access_token=access_token, id_token=id_token, user_info=user_info)
+        self._create_session(access_token=access_token, id_token=id_token, user_info=user_info)
     
         return redirect(url_for(redirect_endpoint))
 
@@ -100,7 +91,7 @@ class AuthApp(OAuth):
         #return ui.json()
 
     def logout(self):
-        _destroy_session()
+        self._destroy_session()
 
     def require_logon(self, f):
         @wraps(f)
@@ -111,4 +102,18 @@ class AuthApp(OAuth):
             return f(*args, **kwargs)
     
         return decorated
+
+    def _create_session(self, access_token, id_token, user_info):
+        logger.debug(f'Creating session for {user_info}')
+        session['auth_access_token'] = access_token
+        session['auth_id_token'] = id_token
+        session['auth_user_info'] = user_info
+
+        for hook in self.logon_hooks:
+            hook(user_info)
+    
+    def _destroy_session(self):
+        for k in ['auth_access_token', 'auth_id_token', 'auth_user_info']:
+            if k in session:
+                del session[k]
 
