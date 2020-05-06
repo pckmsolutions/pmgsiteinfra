@@ -1,4 +1,5 @@
-from flask import Blueprint, current_app, jsonify, request, session, make_response
+from flask import Blueprint, current_app, jsonify, request, session, make_response, g
+import requests
 from werkzeug.exceptions import abort as werk_abort
 from logging import LoggerAdapter
 
