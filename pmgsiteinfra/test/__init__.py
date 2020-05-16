@@ -12,17 +12,17 @@ class CommonTestBase(TestCase):
     def app_context(self):
         return self.act_app.app_context()
 
-class FlywayDbTestCase(object):
+class DbTestCase(object):
     def create_db(self):
         logger.info(f'Using test database {self.MYSQL_DB} with scripts directory {self.MYSQL_DB_SCRIPT_DIR}')
 
         with self.con_scope() as cur:
             cur.execute(f'CREATE DATABASE {self.MYSQL_DB}')
 
-        subprocess.run(['flyway', f'-url=jdbc:mysql://{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}',
-            f'-user={self.MYSQL_USER}',
-            f'-password={self.MYSQL_PASSWORD}',
-            f'-locations=filesystem:{self.MYSQL_DB_SCRIPT_DIR}', 'migrate'])
+        self.migrate()
+
+    def migrate(self):
+        raise NotImplementedError()
 
     def drop_db(self):
         with self.con_scope() as cur:
@@ -48,6 +48,26 @@ class FlywayDbTestCase(object):
         finally:
             cur.close()
             conn.close()
+
+class FlywayDbTestCase(DbTestCase):
+    def migrate(self):
+        subprocess.run(['flyway', f'-url=jdbc:mysql://{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}',
+            f'-user={self.MYSQL_USER}',
+            f'-password={self.MYSQL_PASSWORD}',
+            f'-locations=filesystem:{self.MYSQL_DB_SCRIPT_DIR}', 'migrate'])
+
+try:
+    from yoyo import read_migrations, get_backend
+    class YoyoDbTestCase(DbTestCase):
+        def migrate(self):
+            backend = get_backend(f'mysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}')
+            migrations = read_migrations(self.MYSQL_DB_SCRIPT_DIR)
+            
+            with backend.lock():
+                backend.apply_migrations(backend.to_apply(migrations))
+                backend.rollback_migrations(backend.to_rollback(migrations))
+except ImportError:
+    pass
 
 class AppTestBase(CommonTestBase, FlywayDbTestCase):
     def setUp(self):

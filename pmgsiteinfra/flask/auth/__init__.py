@@ -102,6 +102,18 @@ class AuthApp(OAuth):
         #ui = self.govsieauth.get(self.govsieauth.server_metadata['userinfo_endpoint'], token=access_token())
         #logger.debug(f'AUTH: Userinfo: {ui}')
         #return ui.json()
+    def _api_endpoint(self, *items):
+        return '/'.join([*[self.server_metadata["api_endpoint"]], *items]), \
+                {'Authorization': 'SSWS DI5TSgB62NCehyP0KqgBFcXCCU1399omoagEAvnVezYkBI8K.MjZxy9AdtqMxH3uxqtfXfWoO'}
+            #dict(token_type='ssws', access_token='DI5TSgB62NCehyP0KqgBFcXCCU1399omoagEAvnVezYkBI8K.MjZxy9AdtqMxH3uxqtfXfWoO')
+
+    def get_user_profile(self, uid_or_email):
+        #from authlib.oauth2.auth import ClientAuth
+        endpoint, headers = self._api_endpoint('users', uid_or_email)
+        #auth=ClientAuth('MjZxy9AdtqMxH3uxqtfXfWoO', 'DI5TSgB62NCehyP0KqgBFcXCCU1399omoagEAvnVezYkBI8K')
+        #user_detail = AuthServerCallError.wrap_call(self.govsieauth.get, endpoint, auth=auth)
+        user_detail = AuthServerCallError.wrap_call(self.govsieauth.get, endpoint, headers=headers, withhold_token=True)
+        return user_detail['profile']
 
     def logout(self):
         self._destroy_session()
