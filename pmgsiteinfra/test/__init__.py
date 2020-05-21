@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import subprocess
 from pmgdbutil import DbConnectionPool
 from logging import getLogger
+from yoyo import read_migrations, get_backend
 
 logger = getLogger(__name__)
 
@@ -49,27 +50,15 @@ class DbTestCase(object):
             cur.close()
             conn.close()
 
-class FlywayDbTestCase(DbTestCase):
+class YoyoDbTestCase(DbTestCase):
     def migrate(self):
-        subprocess.run(['flyway', f'-url=jdbc:mysql://{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}',
-            f'-user={self.MYSQL_USER}',
-            f'-password={self.MYSQL_PASSWORD}',
-            f'-locations=filesystem:{self.MYSQL_DB_SCRIPT_DIR}', 'migrate'])
+        backend = get_backend(f'mysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}')
+        migrations = read_migrations(self.MYSQL_DB_SCRIPT_DIR)
+        
+        with backend.lock():
+            backend.apply_migrations(backend.to_apply(migrations))
 
-try:
-    from yoyo import read_migrations, get_backend
-    class YoyoDbTestCase(DbTestCase):
-        def migrate(self):
-            backend = get_backend(f'mysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}')
-            migrations = read_migrations(self.MYSQL_DB_SCRIPT_DIR)
-            
-            with backend.lock():
-                backend.apply_migrations(backend.to_apply(migrations))
-                backend.rollback_migrations(backend.to_rollback(migrations))
-except ImportError:
-    pass
-
-class AppTestBase(CommonTestBase, FlywayDbTestCase):
+class AppTestBase(CommonTestBase, YoyoDbTestCase):
     def setUp(self):
         self.create_db()
         self.act_app = self.create_app()

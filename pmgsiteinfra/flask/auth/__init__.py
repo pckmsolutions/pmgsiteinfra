@@ -24,12 +24,18 @@ def is_user_logged_on():
     return bool(access_token())
 
 class AuthServerCallError(Exception):
-    @staticmethod
-    def wrap_call(call, *args, **vargs):
-        resp = call(*args, **vargs)
-        if 200 <= resp.status_code <= 299:
-            return resp.json()
-        raise AuthServerCallError()
+    pass
+
+OK_RANGE = range(200,300)
+
+def wrap_call(call, allowed_codes, *args, **vargs):
+    resp = call(*args, **vargs)
+    if resp.status_code in allowed_codes:
+        return resp.json()
+    raise AuthServerCallError()
+
+def wrap_call_200s(call, *args, **vargs):
+    return wrap_call(call, OK_RANGE, *args, **vargs)
 
 class AuthApp(OAuth):
     def __init__(self, app, logon_endpoint):
@@ -72,7 +78,7 @@ class AuthApp(OAuth):
     
     def get_oauth2_certs(self):
         if not self.id_token_certs:
-            self.id_token_certs = AuthServerCallError.wrap_call(self.govsieauth.get, self.server_metadata['jwks_uri'])
+            self.id_token_certs = wrap_call_200s(self.govsieauth.get, self.server_metadata['jwks_uri'])
         return self.id_token_certs
     
     
@@ -83,7 +89,7 @@ class AuthApp(OAuth):
         id_token = jwt.decode(access_token['id_token'], key, claims_cls=CodeIDToken)
         id_token.validate()
 
-        user_info = AuthServerCallError.wrap_call(self.govsieauth.get, self.server_metadata['userinfo_endpoint'])
+        user_info = wrap_call_200s(self.govsieauth.get, self.server_metadata['userinfo_endpoint'])
         self._create_session(access_token=access_token, id_token=id_token, user_info=user_info)
 
         redirect_endpoint = session['requested_page'] if 'requested_page' in session else url_for(default_redirect_endpoint)
@@ -112,8 +118,12 @@ class AuthApp(OAuth):
         endpoint, headers = self._api_endpoint('users', uid_or_email)
         #auth=ClientAuth('MjZxy9AdtqMxH3uxqtfXfWoO', 'DI5TSgB62NCehyP0KqgBFcXCCU1399omoagEAvnVezYkBI8K')
         #user_detail = AuthServerCallError.wrap_call(self.govsieauth.get, endpoint, auth=auth)
-        user_detail = AuthServerCallError.wrap_call(self.govsieauth.get, endpoint, headers=headers, withhold_token=True)
-        return user_detail['profile']
+        user_detail_resp = self.govsieauth.get(endpoint, headers=headers, withhold_token=True)
+        if user_detail_resp.status_code in OK_RANGE:
+            return user_detail_resp.json()['profile']
+        if user_detail_resp.status_code == 404:
+            return None
+        raise AuthServerCallError()
 
     def logout(self):
         self._destroy_session()
