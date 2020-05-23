@@ -131,12 +131,20 @@ class AuthApp(OAuth):
     def require_logon(self, f):
         @wraps(f)
         def decorated(*args, **kwargs):
-            if 'auth_id_token' not in session:
+            if not AuthApp._is_logged_on():
                 session['requested_page'] = request.url
                 return redirect(url_for(self.logon_endpoint))
             return f(*args, **kwargs)
     
         return decorated
+
+    @staticmethod
+    def _is_logged_on():
+        return 'auth_id_token' in session
+
+    @property
+    def logged_on(self):
+        return AuthApp._is_logged_on()
 
     def _create_session(self, access_token, id_token, user_info):
         logger.debug(f'Creating session for {user_info}')
