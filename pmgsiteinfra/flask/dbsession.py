@@ -52,8 +52,6 @@ class DbSessionInterface(SessionInterface):
         return DbSession(sid=sid, permanent=self.permanent)
 
     def save_session(self, app, session, response):
-        logger.debug(f'Save session: {session.sid}')
-
         domain = self.get_cookie_domain(app)
         path = self.get_cookie_path(app)
         #if not session:
@@ -66,7 +64,6 @@ class DbSessionInterface(SessionInterface):
         secure = self.get_cookie_secure(app)
         expires = self.get_expiration_time(app, session)
         data = dict(session)
-        logger.debug(f'Saving session: {data}')
         self.cache.set(session.sid, data, app.permanent_session_lifetime.total_seconds())
         signer = self._get_signer(app)
         if signer:

@@ -17,7 +17,7 @@ def add_request_logger(app, context_info_formatter):
     app.before_request(set_log_context)
 
 def get_info_blueprint(app_info):
-    info_bp = Blueprint('info', __name__)
+    info_bp = Blueprint('__siteinfo__', __name__)
     
     @info_bp.route('', methods=['GET', ])
     def get():
