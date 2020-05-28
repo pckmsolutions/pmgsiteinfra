@@ -66,15 +66,15 @@ class AuthApp(OAuth):
         return self.govsieauth.server_metadata
 
     def logon_page(self, redirect_endpoint, render = None):
-        args = {k:v for k, v in request.args.items() if k in ['client_id', 'redirect_uri', 'state']}
-        if args:
+        args = request.args.to_dict()
+        if all(k in args for k in ['client_id', 'redirect_uri', 'state']):
             if not render:
                 raise RuntimeError('To re-enter logon page a render function is required.')
             return render(auth_url=self.server_metadata['authorization_endpoint'], **args)
     
         redirect_url = url_for(redirect_endpoint, _external=True)
     
-        return self.govsieauth.authorize_redirect(redirect_url)#, **params)
+        return self.govsieauth.authorize_redirect(redirect_url, **args)
     
     def get_oauth2_certs(self):
         if not self.id_token_certs:
@@ -110,20 +110,22 @@ class AuthApp(OAuth):
         #return ui.json()
     def _api_endpoint(self, *items):
         return '/'.join([*[self.server_metadata["api_endpoint"]], *items]), \
-                {'Authorization': 'SSWS DI5TSgB62NCehyP0KqgBFcXCCU1399omoagEAvnVezYkBI8K.MjZxy9AdtqMxH3uxqtfXfWoO'}
+                dict(headers={'Authorization': 'SSWS DI5TSgB62NCehyP0KqgBFcXCCU1399omoagEAvnVezYkBI8K.MjZxy9AdtqMxH3uxqtfXfWoO'},
+                        withhold_token=True)
             #dict(token_type='ssws', access_token='DI5TSgB62NCehyP0KqgBFcXCCU1399omoagEAvnVezYkBI8K.MjZxy9AdtqMxH3uxqtfXfWoO')
 
     def get_user_profile(self, uid_or_email):
-        #from authlib.oauth2.auth import ClientAuth
-        endpoint, headers = self._api_endpoint('users', uid_or_email)
-        #auth=ClientAuth('MjZxy9AdtqMxH3uxqtfXfWoO', 'DI5TSgB62NCehyP0KqgBFcXCCU1399omoagEAvnVezYkBI8K')
-        #user_detail = AuthServerCallError.wrap_call(self.govsieauth.get, endpoint, auth=auth)
-        user_detail_resp = self.govsieauth.get(endpoint, headers=headers, withhold_token=True)
+        endpoint, kwargs = self._api_endpoint('users', uid_or_email)
+        user_detail_resp = self.govsieauth.get(endpoint, **kwargs)
         if user_detail_resp.status_code in OK_RANGE:
             return user_detail_resp.json()['profile']
         if user_detail_resp.status_code == 404:
             return None
         raise AuthServerCallError()
+
+    def create_user(self, username, password, firstname, lastname, email):
+        endpoint, kwargs = self._api_endpoint('users', username)
+        resp = self.govsieauth.put(endpoint, json=dict(password=password, firstname=firstname, lastname=lastname, email=email), **kwargs)
 
     def logout(self):
         self._destroy_session()
