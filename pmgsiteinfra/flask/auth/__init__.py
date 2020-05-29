@@ -40,13 +40,14 @@ def wrap_call_200s(call, *args, **vargs):
     return wrap_call(call, OK_RANGE, *args, **vargs)
 
 class AuthApp(OAuth):
-    def __init__(self, app, logon_endpoint):
+    def __init__(self, app, logon_endpoint, api_token):
         super(AuthApp, self).__init__(app) #TODO, cache=self.cache)
         app.before_request(self._before_request)
         app.after_request(self._after_request)
         self.id_token_certs = None
         self.logon_endpoint = logon_endpoint
         self.logon_hooks = []
+        self.api_token = api_token
 
     def register(self, **reg_args):
         super(AuthApp, self).register('govsieauth', **reg_args)
@@ -110,7 +111,7 @@ class AuthApp(OAuth):
         #return ui.json()
     def _api_endpoint(self, *items):
         return '/'.join([*[self.server_metadata["api_endpoint"]], *items]), \
-                dict(headers={'Authorization': 'SSWS DI5TSgB62NCehyP0KqgBFcXCCU1399omoagEAvnVezYkBI8K.MjZxy9AdtqMxH3uxqtfXfWoO'},
+                dict(headers={'Authorization': f'SSWS {self.api_token}'},
                         withhold_token=True)
             #dict(token_type='ssws', access_token='DI5TSgB62NCehyP0KqgBFcXCCU1399omoagEAvnVezYkBI8K.MjZxy9AdtqMxH3uxqtfXfWoO')
 
