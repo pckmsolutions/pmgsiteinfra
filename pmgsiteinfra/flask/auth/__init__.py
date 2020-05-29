@@ -6,6 +6,8 @@ from logging import getLogger
 import requests
 from functools import wraps
 
+from werkzeug.security import gen_salt
+
 logger = getLogger(__name__)
 
 def access_token(key=None):
@@ -58,8 +60,6 @@ class AuthApp(OAuth):
     def register_logon_hook(self, call):
         self.logon_hooks.append(call)
 
-    #def logon_page_endpoing(self, redirect_endpoint):
-    #    return self.govsieauth.authorize_redirect(redirect_url)#, **params)
     @property
     def server_metadata(self):
         self.govsieauth._load_server_metadata()
@@ -125,7 +125,24 @@ class AuthApp(OAuth):
 
     def create_user(self, username, password, firstname, lastname, email):
         endpoint, kwargs = self._api_endpoint('users', username)
-        resp = self.govsieauth.put(endpoint, json=dict(password=password, firstname=firstname, lastname=lastname, email=email), **kwargs)
+
+        return wrap_call_200s(self.govsieauth.put, endpoint,
+                json=dict(password=password, firstname=firstname, lastname=lastname, email=email), **kwargs)
+
+    def get_reset_token(self, username):
+        endpoint, kwargs = self._api_endpoint('users', username, 'lifecycle/reset')
+
+        return wrap_call_200s(self.govsieauth.get, endpoint, **kwargs)
+
+    def reset_token(self, token, password):
+        endpoint, kwargs = self._api_endpoint('users', token, 'lifecycle/reset')
+
+        return wrap_call_200s(self.govsieauth.put, endpoint, json=dict(password=password), **kwargs)
+
+    def activate_user(self, token):
+        endpoint, kwargs = self._api_endpoint('users', token)
+
+        return wrap_call_200s(self.govsieauth.put, endpoint, **kwargs)
 
     def logout(self):
         self._destroy_session()

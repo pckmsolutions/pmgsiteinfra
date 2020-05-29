@@ -6,6 +6,7 @@ import subprocess
 from pmgdbutil import DbConnectionPool
 from logging import getLogger
 from yoyo import read_migrations, get_backend
+from itertools import count
 
 logger = getLogger(__name__)
 
@@ -92,6 +93,7 @@ class MockCursorTestBase(CommonTestBase):
             self.act_app = self.create_app()
 
         self.app = self.act_app.test_client()
+        self.call_count = 0
 
     def cursor_has_columns(self, *columns):
         self.mock_cursor.description = [(col,) for col in columns]
@@ -100,3 +102,10 @@ class MockCursorTestBase(CommonTestBase):
         self.mock_cursor.fetchone = lambda : rows[0]
         self.mock_cursor.fetchall = lambda : rows
 
+    def cursor_returns_rows_on_call(self, *calls):
+        def rows(ind=None):
+            ret = calls[self.call_count]
+            self.call_count += 1
+            return ret if ind == None else ret[0] if ret else None
+        self.mock_cursor.fetchone = lambda : rows(0)
+        self.mock_cursor.fetchall = lambda : rows()
