@@ -39,8 +39,9 @@ def get_info_blueprint(app_info):
 
 def abort(error_code, **kwargs):
     params= ', '.join([f'{k}={v}' for (k,v) in kwargs.items()])
-    current_app.logger.info(f'Aborting call with {error_code.name} ({params})')
-    werk_abort(error_response(error_code, **kwargs))
+    description = f'Aborting call with {error_code.name} params:({params})'
+    current_app.logger.info(description)
+    werk_abort(error_code.value[1], response=error_response(error_code, **kwargs), description=description)
 
 def error_response(error_code, **kwargs):
     return make_response(jsonify(**{**kwargs, **dict(error=error_code.value[0])}), error_code.value[1])

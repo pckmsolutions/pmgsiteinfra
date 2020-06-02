@@ -5,7 +5,7 @@ from flask import redirect, url_for, session, g, request
 from logging import getLogger
 import requests
 from functools import wraps
-
+from werkzeug.exceptions import HTTPException
 from werkzeug.security import gen_salt
 
 logger = getLogger(__name__)
@@ -26,7 +26,16 @@ def is_user_logged_on():
     return bool(access_token())
 
 class AuthServerCallError(Exception):
-    pass
+    def __init__(self, response=None):
+        self.response = response
+
+    @property
+    def json(self):
+        try:
+            return self.response.json()
+        except:
+            pass
+        return None
 
 OK_RANGE = range(200,300)
 
@@ -34,7 +43,7 @@ def wrap_call(call, allowed_codes, *args, **vargs):
     resp = call(*args, **vargs)
     if resp.status_code in allowed_codes:
         return resp.json()
-    raise AuthServerCallError()
+    raise AuthServerCallError(response=resp)
 
 def wrap_call_200s(call, *args, **vargs):
     return wrap_call(call, OK_RANGE, *args, **vargs)
@@ -122,7 +131,7 @@ class AuthApp(OAuth):
             return user_detail_resp.json()['profile']
         if user_detail_resp.status_code == 404:
             return None
-        raise AuthServerCallError()
+        raise AuthServerCallError(response=user_detail_resp)
 
     def create_user(self, username, password, firstname, lastname, email):
         endpoint, kwargs = self._api_endpoint('users', username)
