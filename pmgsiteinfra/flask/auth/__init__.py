@@ -77,12 +77,15 @@ class AuthApp(OAuth):
 
     def logon_page(self, redirect_endpoint, render = None):
         args = request.args.to_dict()
+
         if all(k in args for k in ['client_id', 'redirect_uri', 'state']):
             if not render:
                 raise RuntimeError('To re-enter logon page a render function is required.')
             return render(auth_url=self.server_metadata['authorization_endpoint'], **args)
     
         redirect_url = url_for(redirect_endpoint, _external=True)
+        if not 'requested' in args:
+            session.pop('requested_page', None)
     
         return self.govsieauth.authorize_redirect(redirect_url, **args)
     
@@ -102,7 +105,7 @@ class AuthApp(OAuth):
         user_info = wrap_call_200s(self.govsieauth.get, self.server_metadata['userinfo_endpoint'])
         self._create_session(access_token=access_token, id_token=id_token, user_info=user_info)
 
-        redirect_endpoint = session['requested_page'] if 'requested_page' in session else url_for(default_redirect_endpoint)
+        redirect_endpoint = session.pop('requested_page', url_for(default_redirect_endpoint))
     
         return redirect(redirect_endpoint)
 
@@ -124,14 +127,20 @@ class AuthApp(OAuth):
                         withhold_token=True)
             #dict(token_type='ssws', access_token='DI5TSgB62NCehyP0KqgBFcXCCU1399omoagEAvnVezYkBI8K.MjZxy9AdtqMxH3uxqtfXfWoO')
 
-    def get_user_profile(self, uid_or_email):
+    def get_user(self, uid_or_email):
         endpoint, kwargs = self._api_endpoint('users', uid_or_email)
         user_detail_resp = self.govsieauth.get(endpoint, **kwargs)
         if user_detail_resp.status_code in OK_RANGE:
-            return user_detail_resp.json()['profile']
+            return user_detail_resp.json()
         if user_detail_resp.status_code == 404:
             return None
         raise AuthServerCallError(response=user_detail_resp)
+
+    def get_user_profile(self, uid_or_email):
+        return self.get_user(uid_or_email)['profile']
+
+    def get_user_id(self, uid_or_email):
+        return self.get_user(uid_or_email)['uid']
 
     def create_user(self, username, password, firstname, lastname, email):
         endpoint, kwargs = self._api_endpoint('users', username)
@@ -162,7 +171,7 @@ class AuthApp(OAuth):
         def decorated(*args, **kwargs):
             if not AuthApp._is_logged_on():
                 session['requested_page'] = request.url
-                return redirect(url_for(self.logon_endpoint))
+                return redirect(url_for(self.logon_endpoint, requested=True))
             return f(*args, **kwargs)
     
         return decorated
