@@ -137,10 +137,12 @@ class AuthApp(OAuth):
         raise AuthServerCallError(response=user_detail_resp)
 
     def get_user_profile(self, uid_or_email):
-        return self.get_user(uid_or_email)['profile']
+        user = self.get_user(uid_or_email)
+        return user and user['profile']
 
     def get_user_id(self, uid_or_email):
-        return self.get_user(uid_or_email)['uid']
+        user = self.get_user(uid_or_email)
+        return user and user['uid']
 
     def create_user(self, username, password, firstname, lastname, email):
         endpoint, kwargs = self._api_endpoint('users', username)
