@@ -37,6 +37,9 @@ class AuthServerCallError(Exception):
             pass
         return None
 
+    def __repr__(self_):
+        return f'AuthServerCallError({self.response!r})'
+
 OK_RANGE = range(200,300)
 
 def wrap_call(call, allowed_codes, *args, **vargs):
