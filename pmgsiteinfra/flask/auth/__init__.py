@@ -131,8 +131,10 @@ class AuthApp(OAuth):
             #dict(token_type='ssws', access_token='DI5TSgB62NCehyP0KqgBFcXCCU1399omoagEAvnVezYkBI8K.MjZxy9AdtqMxH3uxqtfXfWoO')
 
     def get_user(self, uid_or_email):
-        endpoint, kwargs = self._api_endpoint('users', uid_or_email)
-        user_detail_resp = self.govsieauth.get(endpoint, **kwargs)
+        endpoint, kwargs = self._api_endpoint('users')
+        user_detail_resp = self.govsieauth.get(endpoint,
+                params={'uid_or_email': uid_or_email},
+                **kwargs)
         if user_detail_resp.status_code in OK_RANGE:
             return user_detail_resp.json()
         if user_detail_resp.status_code == 404:
@@ -148,25 +150,39 @@ class AuthApp(OAuth):
         return user and user['uid']
 
     def create_user(self, username, password, firstname, lastname, email):
-        endpoint, kwargs = self._api_endpoint('users', username)
+        endpoint, kwargs = self._api_endpoint('users')
 
         return wrap_call_200s(self.govsieauth.put, endpoint,
-                json=dict(password=password, firstname=firstname, lastname=lastname, email=email), **kwargs)
+                json={
+                    'username': username,
+                    'password': password,
+                    'firstname': firstname,
+                    'lastname': lastname,
+                    'email': email},
+                **kwargs)
 
     def get_reset_token(self, username):
-        endpoint, kwargs = self._api_endpoint('users', username, 'lifecycle/reset')
+        endpoint, kwargs = self._api_endpoint('users', 'lifecycle/reset')
 
-        return wrap_call_200s(self.govsieauth.get, endpoint, **kwargs)
+        return wrap_call_200s(self.govsieauth.get, endpoint,
+                params={'uid_or_email': username},
+                **kwargs)
 
     def reset_token(self, token, password):
-        endpoint, kwargs = self._api_endpoint('users', token, 'lifecycle/reset')
+        endpoint, kwargs = self._api_endpoint('users', 'lifecycle/reset')
 
-        return wrap_call_200s(self.govsieauth.put, endpoint, json=dict(password=password), **kwargs)
+        return wrap_call_200s(self.govsieauth.put, endpoint,
+                json={
+                    'token': token,
+                    'password': password},
+                **kwargs)
 
     def activate_user(self, token):
-        endpoint, kwargs = self._api_endpoint('users', token)
+        endpoint, kwargs = self._api_endpoint('users', 'activate')
 
-        return wrap_call_200s(self.govsieauth.put, endpoint, **kwargs)
+        return wrap_call_200s(self.govsieauth.put, endpoint, 
+                json={'token': token},
+                **kwargs)
 
     def logout(self):
         self._destroy_session()
