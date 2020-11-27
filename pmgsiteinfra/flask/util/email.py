@@ -13,7 +13,7 @@ def send_email(addr, subject_template, body_template, **args):
             f'{subject_template}').render(**render_args)
     text = current_app.jinja_env.get_template(
             f'{body_template}.text').render(**render_args)
-    if current_app.config['SMTP_SKIP']:
+    if current_app.config.get('SMTP_SKIP'):
         logger.info(f'Skipping SMTP send. Would be sending to {addr}: {text}')
         return
     html = current_app.jinja_env.get_template(

@@ -6,6 +6,7 @@ from logging import getLogger
 from functools import wraps
 from werkzeug.exceptions import HTTPException, BadRequestKeyError
 from werkzeug.security import gen_salt
+from ..util.email import send_email
 
 logger = getLogger(__name__)
 
@@ -247,8 +248,6 @@ class AuthApp(OAuth):
     
     def handle_reset(self, reset_html, root_regmsg,
             email_reset_subject, email_reset_body):
-        if 'token' in request.args:
-            return self.reset_tok(request.args['token'])
         if request.method == 'GET':
             return render_template(reset_html, message=request.values.get('message'))
     
