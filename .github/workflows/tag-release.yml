@@ -9,11 +9,6 @@ on:
       - main
     paths-ignore: 
       - 'setup.cfg'
-  pull_request:
-    branches: 
-      - main
-    paths-ignore: 
-      - 'setup.cfg'
 
 jobs:
   update_version:

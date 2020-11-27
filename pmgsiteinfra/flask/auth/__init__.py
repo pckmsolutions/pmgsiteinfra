@@ -1,11 +1,10 @@
 from authlib.oidc.core import CodeIDToken
 from authlib.jose import jwt
 from authlib.integrations.flask_client import OAuth
-from flask import redirect, url_for, session, g, request
+from flask import redirect, url_for, session, g, request, render_template
 from logging import getLogger
-import requests
 from functools import wraps
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, BadRequestKeyError
 from werkzeug.security import gen_salt
 
 logger = getLogger(__name__)
@@ -21,9 +20,6 @@ def _session_dict(sess_key, sub_key=None):
     if not dic:
         return None
     return dic if not sub_key else dic[sub_key]
-
-def is_user_logged_on():
-    return bool(access_token())
 
 class AuthServerCallError(Exception):
     def __init__(self, response=None):
@@ -114,6 +110,9 @@ class AuthApp(OAuth):
 
     def user_id(self):
         return id_token('sub')
+
+    def is_user_logged_on(self):
+        return bool(access_token())
 
     def user_info(self):
         return session.get('auth_user_info', None)
@@ -219,3 +218,106 @@ class AuthApp(OAuth):
             if k in session:
                 del session[k]
 
+    def handle_logon(self, logon_html, root_authorise):
+        logon_args = request.args.to_dict()
+        def render(**args):
+            return render_template(logon_html, **{**logon_args, **args})
+        
+        return self.logon_page(root_authorise, render=render)
+    
+    def handle_authorise(self, next_home, root_logon):
+        try:
+            return self.authorise_flow(next_home)
+        except BadRequestKeyError:
+            return redirect(url_for(root_logon, message='auth'))
+    
+    def handle_activate(self, token, root_logon, root_regmsg):
+        try:
+            resp = self.activate_user(token)
+            return redirect(url_for(root_logon, message='activated'))
+        except AuthServerCallError as err:
+            json = err.json
+            if json and 'error' in json and json['error'] == 'E0003':
+                return redirect(url_for(root_regmsg, message='no_token_reg'))
+            return redirect(url_for(root_regmsg, message='bad_user'))
+    
+    def handle_regmsg(self, regmsg_html):
+        return render_template('regmsg.html',
+                message=request.values.get('message'))
+    
+    def handle_reset(self, reset_html, root_regmsg,
+            email_reset_subject, email_reset_body):
+        if 'token' in request.args:
+            return self.reset_tok(request.args['token'])
+        if request.method == 'GET':
+            return render_template(reset_html, message=request.values.get('message'))
+    
+        email = request.values['email']
+    
+        try:
+            resp = self.get_reset_token(username=email)
+        except AuthServerCallError as err:
+            return redirect(url_for(root_regmsg, message='bad_user'))
+    
+        send_email(addr=email, subject_template=email_reset_subject,
+                body_template=email_reset_body, token=resp['token'])
+        
+        return redirect(url_for(root_regmsg, message='reset'))
+    
+    def handle_reset_tok(self, token, setpassword_html, root_regmsg, root_logon):
+        if request.method == 'GET':
+            return render_template(setpassword_html)
+        try:
+            if request.values.get('password') != request.values.get('password'):
+                raise RuntimeError('Passwords do not match')
+            resp = self.reset_token(token,
+                    request.values.get('password'))
+        except AuthServerCallError as err:
+            json = err.json
+            if json and 'error' in json and json['error'] == 'E0003':
+                return redirect(url_for(root_regmsg, message='no_token_res'))
+            return redirect(url_for(root_regmsg, message='bad_user'))
+    
+        return redirect(url_for(root_logon, message='reset'))
+    
+    def handle_register(self, setpassword_html, root_register, root_reset, 
+            root_regmsg, email_activate_subject, email_activate_body,
+            get_newuser):
+        if request.method == 'GET':
+            return render_template(setpassword_html,
+                    message=request.values.get('message'))
+    
+        if request.values.get('password') != request.values.get('password'):
+            raise RuntimeError('Passwords do not match')
+    
+        def no_perm():
+            return redirect(url_for(root_register, message='perm'))
+    
+        email = request.values['email']
+        user_info = get_newuser(username = email)
+        if user_info is None:
+            return redirect(url_for(root_register, message='not_found'))
+    
+        try:
+            resp = self.create_user(username=email,
+                    password=request.values['password'],
+                    firstname=user_info.firstname,
+                    lastname=user_info.lastname,
+                    email=email)
+        except AuthServerCallError as err:
+            logger.error('Auth server call error %s', err)
+            json = err.json
+            if json and 'error' in json and json['error'] == 'E0004':
+                return redirect(url_for(root_reset, message='user_exists'))
+    
+            logger.error('Auth has failed for unknown reason')
+            return redirect(url_for(root_regmsg, message='unknown'))
+    
+        send_email(addr=email, subject_template=email_activate_subject,
+                body_template=email_activate_body, token=resp['token'])
+        
+        return redirect(url_for(root_regmsg, message='email'))
+    
+    def handle_logout(self, root_slash):
+        self.logout()
+        return redirect(url_for(root_slash))
