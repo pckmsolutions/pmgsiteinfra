@@ -6,7 +6,6 @@ from logging import getLogger
 from functools import wraps
 from werkzeug.exceptions import HTTPException, BadRequestKeyError
 from werkzeug.security import gen_salt
-from ..util.email import send_email
 
 logger = getLogger(__name__)
 
@@ -49,7 +48,7 @@ def wrap_call_200s(call, *args, **vargs):
     return wrap_call(call, OK_RANGE, *args, **vargs)
 
 class AuthApp(OAuth):
-    def __init__(self, app, logon_endpoint, api_token):
+    def __init__(self, app, *, logon_endpoint, api_token, email_sender):
         super(AuthApp, self).__init__(app) #TODO, cache=self.cache)
         app.before_request(self._before_request)
         app.after_request(self._after_request)
@@ -57,6 +56,7 @@ class AuthApp(OAuth):
         self.logon_endpoint = logon_endpoint
         self.logon_hooks = []
         self.api_token = api_token
+        self.send_email = email_sender
 
     def register(self, **reg_args):
         super(AuthApp, self).register('govsieauth', **reg_args)
@@ -258,7 +258,7 @@ class AuthApp(OAuth):
         except AuthServerCallError as err:
             return redirect(url_for(root_regmsg, message='bad_user'))
     
-        send_email(addr=email, subject_template=email_reset_subject,
+        self.send_email(addr=email, subject_template=email_reset_subject,
                 body_template=email_reset_body, token=resp['token'])
         
         return redirect(url_for(root_regmsg, message='reset'))
@@ -312,7 +312,7 @@ class AuthApp(OAuth):
             logger.error('Auth has failed for unknown reason')
             return redirect(url_for(root_regmsg, message='unknown'))
     
-        send_email(addr=email, subject_template=email_activate_subject,
+        self.send_email(addr=email, subject_template=email_activate_subject,
                 body_template=email_activate_body, token=resp['token'])
         
         return redirect(url_for(root_regmsg, message='email'))
