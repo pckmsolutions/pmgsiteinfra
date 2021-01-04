@@ -243,7 +243,7 @@ class AuthApp(OAuth):
             return redirect(url_for(root_regmsg, message='bad_user'))
     
     def handle_regmsg(self, regmsg_html):
-        return render_template('regmsg.html',
+        return render_template(regmsg_html,
                 message=request.values.get('message'))
     
     def handle_reset(self, reset_html, root_regmsg,
@@ -281,7 +281,7 @@ class AuthApp(OAuth):
     
     def handle_register(self, setpassword_html, root_register, root_reset, 
             root_regmsg, email_activate_subject, email_activate_body,
-            get_newuser):
+            get_user):
         if request.method == 'GET':
             return render_template(setpassword_html,
                     message=request.values.get('message'))
@@ -293,7 +293,7 @@ class AuthApp(OAuth):
             return redirect(url_for(root_register, message='perm'))
     
         email = request.values['email']
-        user_info = get_newuser(username = email)
+        user_info = get_user(username = email)
         if user_info is None:
             return redirect(url_for(root_register, message='not_found'))
     
