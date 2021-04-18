@@ -15,8 +15,11 @@ from logging import Handler, LogRecord
 import copy
 
 def send_message(bot, channel, message):
-    t_updater = Updater(bot, use_context=True)
-    t_updater.bot.send_message(channel, message[:4096])
+    try:
+        t_updater = Updater(bot, use_context=True)
+        t_updater.bot.send_message(channel, message[:4096])
+    except Exception:
+        pass 
 
 class LogHandler(Handler):
     def __init__(self, bot_token, chat_id):
