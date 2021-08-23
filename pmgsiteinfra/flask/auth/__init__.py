@@ -117,13 +117,7 @@ class AuthApp(OAuth):
 
     def user_info(self):
         return session.get('auth_user_info', None)
-        #if not is_user_logged_on():
-        #    return None
 
-        #logger.debug(f'AUTH: Userinfo using: {self.govsieauth.server_metadata["userinfo_endpoint"]}')
-        #ui = self.govsieauth.get(self.govsieauth.server_metadata['userinfo_endpoint'], token=access_token())
-        #logger.debug(f'AUTH: Userinfo: {ui}')
-        #return ui.json()
     def _api_endpoint(self, *items):
         return '/'.join([*[self.server_metadata["api_endpoint"]], *items]), \
                 dict(headers={'Authorization': f'SSWS {self.api_token}'},
@@ -193,6 +187,7 @@ class AuthApp(OAuth):
             if not AuthApp._is_logged_on():
                 session['requested_page'] = request.url
                 return redirect(url_for(self.logon_endpoint, requested=True))
+
             return f(*args, **kwargs)
     
         return decorated
@@ -247,21 +242,39 @@ class AuthApp(OAuth):
                 message=request.values.get('message'))
     
     def handle_reset(self, reset_html, root_regmsg,
-            email_reset_subject, email_reset_body):
+            email_reset_subject, email_reset_body, get_user):
         if request.method == 'GET':
             return render_template(reset_html, message=request.values.get('message'))
     
         email = request.values['email']
-    
-        try:
-            resp = self.get_reset_token(username=email)
-        except AuthServerCallError as err:
-            return redirect(url_for(root_regmsg, message='bad_user'))
+        reset_token = self.get_user_reset_token(email, get_user)
     
         self.send_email(addr=email, subject_template=email_reset_subject,
-                body_template=email_reset_body, token=resp['token'])
+                body_template=email_reset_body, token=reset_token)
         
         return redirect(url_for(root_regmsg, message='reset'))
+
+    def get_user_reset_token(self, email, get_user):
+        try:
+            resp = self.get_reset_token(username=email)
+            return resp['token']
+        except AuthServerCallError as err:
+            pass
+
+        user_info = get_user(username = email)
+
+        resp = self.create_user(username=email,
+                password=gen_salt(20),
+                firstname=user_info.firstname,
+                lastname=user_info.lastname,
+                email=email)
+
+        # try again after creating the user
+        try:
+            resp = self.get_reset_token(username=email)
+            return resp['token']
+        except AuthServerCallError as err:
+            return redirect(url_for(root_regmsg, message='bad_user'))
     
     def handle_reset_tok(self, token, setpassword_html, root_regmsg, root_logon):
         if request.method == 'GET':
