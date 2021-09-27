@@ -38,8 +38,8 @@ class SendEmail:
 
         sender = self.sender_addr
 
-        msg.add_header('From', f'{sender} <{sender}>')
-        msg.add_header('To', f'{addr} <{addr}>')
+        msg.add_header('From', sender)
+        msg.add_header('To', addr)
         msg.add_header('Subject', subject)
 
         msg.attach(MIMEText(text, 'plain'))
